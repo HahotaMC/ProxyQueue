@@ -4,16 +4,19 @@ import com.google.inject.Inject;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.plugin.Plugin;
-import com.velocitypowered.api.plugin.PluginContainer;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import me.blackgoldytc.proxyqueue.configuration.SettingsHandler;
 import me.blackgoldytc.proxyqueue.configuration.section.ConfigOptions;
+import me.blackgoldytc.proxyqueue.queues.QueueHandler;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -30,7 +33,8 @@ public class ProxyQueues {
     private final ProxyServer proxyServer;
     private final Logger logger;
     private final LegacyComponentSerializer serializer = LegacyComponentSerializer.legacyAmpersand();
-    private final SettingsHandler settingsHandler;
+    private SettingsHandler settingsHandler;
+    private QueueHandler queueHandler;
 
     @Inject
     @DataDirectory
@@ -40,14 +44,14 @@ public class ProxyQueues {
     public ProxyQueues(ProxyServer proxy, Logger logger) {
         this.proxyServer = proxy;
         this.logger = logger;
-        this.settingsHandler = new SettingsHandler(this);
         instance = this;
     }
 
     @Subscribe
     public void onProxyInitialize(ProxyInitializeEvent event) {
-        //startQueues();
-        Optional<PluginContainer> prometheusExporter = proxyServer.getPluginManager().getPlugin("velocity-prometheus-exporter");
+        createFile("config.yml");
+        settingsHandler = new SettingsHandler(this);
+        startQueues();
 
     }
     public SettingsHandler getSettingsHandler() {
@@ -74,6 +78,32 @@ public class ProxyQueues {
 
     public static ProxyQueues getInstance() {
         return instance;
+    }
+
+    private void createFile(String name) {
+        File folder = dataFolder.toFile();
+
+        if (!folder.exists()) {
+            folder.mkdir();
+        }
+        File languageFolder = new File(folder, "languages");
+        if (!languageFolder.exists()) {
+            languageFolder.mkdirs();
+        }
+
+        File file = new File(folder, name);
+
+        if (!file.exists()) {
+            try (InputStream in = getClass().getClassLoader().getResourceAsStream(name)) {
+                Files.copy(in, file.toPath());
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    public void startQueues() {
+        queueHandler = new QueueHandler(settingsHandler.getSettingsManager(), this);
     }
 
 }

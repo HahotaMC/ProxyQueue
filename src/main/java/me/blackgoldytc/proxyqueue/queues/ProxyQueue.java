@@ -32,32 +32,26 @@ public class ProxyQueue {
 
         private final ConcurrentHashMap<UUID, QueuePlayer> queuePlayers = new ConcurrentHashMap<>();
 
-        //Cache of connected priority/staff players, to ease calculation of queue player thresholds
         private final Set<UUID> connectedPriority = ConcurrentHashMap.newKeySet();
         private final Set<UUID> connectedStaff = ConcurrentHashMap.newKeySet();
 
         private final RegisteredServer server;
         private ScheduledTask scheduledTask;
         private int delayLength;
-        private int playersRequired;
         private SettingsManager settingsManager;
 
-        private int maxSlots;
         private int priorityMaxSlots;
-        private int staffMaxSlots;
 
         private final ProxyQueueNotifier notifier;
         private final ProxyQueueEventHandler eventHandler;
         private final QueueTask moveTask;
 
-        public ProxyQueue(ProxyQueues proxyQueues, RegisteredServer server, int playersRequired, int maxSlots, int priorityMaxSlots, int staffMaxSlots) {
+        public ProxyQueue(ProxyQueues proxyQueues, RegisteredServer server,int priorityMaxSlot) {
             this.proxyQueues = proxyQueues;
             this.server = server;
-            this.playersRequired = Math.max(playersRequired, 0);
+            this.delayLength = settingsManager.getProperty(ConfigOptions.DELAY_LENGTH);
 
-            this.maxSlots = Math.max(maxSlots, playersRequired);
-            this.priorityMaxSlots = Math.max(priorityMaxSlots, maxSlots);
-            this.staffMaxSlots = Math.max(staffMaxSlots, priorityMaxSlots);
+            this.priorityMaxSlots = Math.max(priorityMaxSlot,0);
 
             this.eventHandler = new ProxyQueueEventHandler(proxyQueues, this);
             proxyQueues.getProxyServer().getEventManager().register(proxyQueues, eventHandler);
@@ -252,53 +246,10 @@ public class ProxyQueue {
         }
 
         public boolean isActive() {
-            return server.getPlayersConnected().size() >= playersRequired;
+            return server.getPlayersConnected().size() >= 1;
         }
 
-        public boolean isServerFull(QueueType queueType) {
-            int modSlots = getMaxSlots(QueueType.STAFF) - getMaxSlots(QueueType.PRIORITY);
-            int prioritySlots = getMaxSlots(QueueType.PRIORITY) - getMaxSlots(QueueType.NORMAL);
 
-            int usedModSlots;
-            int usedPrioritySlots;
-            int totalPlayers = server.getPlayersConnected().size();
-
-            switch (queueType) {
-                //Staff, check total count is below staff limit
-                case STAFF:
-                    break;
-
-                //Priority, check total count ignoring filled mod slots is below priority limit
-                case PRIORITY:
-                    usedModSlots = Math.min(connectedStaff.size(), modSlots); //Ignore staff beyond assigned slots, prevents mods "stealing" normal slots if normal players leave
-                    totalPlayers -= usedModSlots;
-
-                    break;
-
-                //Normal, check total count ignoring filled mod and priority slots is below normal limit
-                case NORMAL:
-                default:
-                    usedModSlots = Math.min(connectedStaff.size(), modSlots); //Ignore staff beyond assigned slots, prevents mods "stealing" normal slots if normal players leave
-                    usedPrioritySlots = Math.min(connectedPriority.size() + (connectedStaff.size() - usedModSlots), prioritySlots); //Count mods not counted above as filled priority slots, prevents mods "stealing" normal slots if normal players leave
-                    totalPlayers -= (usedModSlots + usedPrioritySlots);
-
-                    break;
-            }
-
-            return totalPlayers >= getMaxSlots(queueType);
-        }
-
-        public int getMaxSlots(QueueType queueType) {
-            switch (queueType) {
-                case STAFF:
-                    return staffMaxSlots;
-                case PRIORITY:
-                    return priorityMaxSlots;
-                case NORMAL:
-                default:
-                    return maxSlots;
-            }
-        }
 
         public int getQueueSize(QueueType queueType) {
             switch (queueType) {
@@ -374,10 +325,6 @@ public class ProxyQueue {
             return this.server;
         }
 
-        public int getPlayersRequired() {
-            return this.playersRequired;
-        }
-
         public void setDelayLength(int delayLength) {
             if (delayLength != this.delayLength) {
                 scheduledTask.cancel();
@@ -388,24 +335,13 @@ public class ProxyQueue {
             this.delayLength = delayLength;
         }
 
-        public void setPlayersRequired(int playersRequired) {
-            this.playersRequired = playersRequired;
-        }
-
-        public void setMaxSlots(int maxSlots) {
-            this.maxSlots = maxSlots;
-        }
-
         public void setPriorityMaxSlots(int priorityMaxSlots) {
             this.priorityMaxSlots = priorityMaxSlots;
         }
 
-        public void setStaffMaxSlots(int staffMaxSlots) {
-            this.staffMaxSlots = staffMaxSlots;
-        }
 
         public String toString() {
-            return "ProxyQueue(queue=" + this.getQueue() + ", server=" + this.getServer() + ", delayLength=" + this.delayLength + ", playersRequired=" + this.getPlayersRequired() + ", maxSlots=" + this.getMaxSlots(QueueType.STAFF) + ", notifyMethod=bossbar)";
+            return "ProxyQueue(queue=" + this.getQueue() + ", server=" + this.getServer() + ", delayLength=" + this.delayLength + ", notifyMethod=bossbar)";
         }
 
         void clearConnectedState(Player player) {
